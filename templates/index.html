@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Storyteller</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            height: fit-content;
+            position: sticky;
+            top: 2rem;
+        }
+
+        .main-content {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .header h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: #64748b;
+            font-size: 0.875rem;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+        }
+
+        .status-online {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-offline {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #374151;
+            font-size: 0.875rem;
+        }
+
+        select, textarea, input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        select:focus, textarea:focus, input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: #e5e7eb;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: none;
+        }
+
+        .slider-value {
+            min-width: 60px;
+            text-align: center;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #4b5563;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #b91c1c;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            background: #d97706;
+        }
+
+        .generation-status {
+            margin: 1rem 0;
+            display: none;
+            text-align: center;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .token-tracker {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-top: 1rem;
+            font-size: 0.75rem;
+            color: #64748b;
+            text-align: center;
+        }
+
+        .story-container {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+            display: none;
+        }
+
+        .story-container.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .story-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .story-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .story-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .story-content {
+            line-height: 1.7;
+            color: #374151;
+            white-space: pre-wrap;
+            font-size: 0.875rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 1rem;
+            background: white;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .story-content:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .continuation-form {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e2e8f0;
+            display: none;
+        }
+
+        .continuation-form.show {
+            display: block;
+        }
+
+        .edit-controls {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f1f5f9;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .edit-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-small {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            width: auto;
+        }
+
+        .error {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            border: 1px solid #fecaca;
+            font-size: 0.875rem;
+        }
+
+        .setup-instructions {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .setup-instructions h3 {
+            color: #1e40af;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .setup-instructions ol {
+            margin-left: 1.5rem;
+            color: #1e40af;
+        }
+
+        .setup-instructions li {
+            margin-bottom: 0.5rem;
+        }
+
+        .setup-instructions code {
+            background: #f1f5f9;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.75rem;
+        }
+
+        .files-section {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .files-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .files-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .files-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            background: white;
+            transition: all 0.2s;
+        }
+
+        .file-item:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #1f2937;
+            font-size: 0.875rem;
+        }
+
+        .file-meta {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: #6b7280;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            color: #3b82f6;
+            border-bottom-color: #3b82f6;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+            
+            .sidebar {
+                position: static;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="header">
+                <h1>AI Storyteller</h1>
+                <p>Create and continue stories with local AI models</p>
+            </div>
+
+            {% if not ollama_running %}
+            <div class="setup-instructions">
+                <h3>🚀 Setup Instructions</h3>
+                <ol>
+                    <li><strong>Install Ollama:</strong> Download from <a href="https://ollama.ai" target="_blank">ollama.ai</a></li>
+                    <li><strong>Start Ollama:</strong> Run <code>ollama serve</code></li>
+                    <li><strong>Download a model:</strong> Run <code>ollama pull llama2</code></li>
+                    <li><strong>Refresh this page</strong> once Ollama is running</li>
+                </ol>
+            </div>
+            {% endif %}
+
+            <div class="status-indicator {% if ollama_running %}status-online{% else %}status-offline{% endif %}">
+                {% if ollama_running %}
+                    ✅ Ollama is running
+                {% else %}
+                    ❌ Ollama is not running
+                {% endif %}
+            </div>
+
+            <form id="storyForm">
+                <div class="form-group">
+                    <label for="modelSelect">AI Model</label>
+                    <select id="modelSelect" name="model">
+                        {% if available_models %}
+                            <optgroup label="Standard Models">
+                                {% for model in standard_models %}
+                                    <option value="{{ model }}" {% if model == default_model %}selected{% endif %}>{{ model }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            <optgroup label="Uncensored Models">
+                                {% for model in uncensored_models %}
+                                    <option value="{{ model }}">{{ model }} 🔓</option>
+                                {% endfor %}
+                            </optgroup>
+                        {% else %}
+                            <option value="{{ default_model }}">{{ default_model }} (not downloaded)</option>
+                        {% endif %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="maxTokens">Max Tokens: <span id="tokenValue">1000</span></label>
+                    <div class="slider-container">
+                        <input type="range" id="maxTokens" class="slider" min="100" max="4000" value="1000" step="100">
+                        <span class="slider-value" id="tokenValueDisplay">1000</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="prompt">Story Prompt</label>
+                    <textarea id="prompt" name="prompt" placeholder="Enter your story prompt here..." required></textarea>
+                </div>
+
+                <button type="submit" class="btn" id="generateBtn" {% if not ollama_running %}disabled{% endif %}>
+                    Generate Story
+                </button>
+            </form>
+
+            <div class="generation-status" id="generationStatus">
+                <div id="generationText">Generating story...</div>
+                <button class="btn btn-warning btn-small" id="stopBtn" style="margin-top: 0.5rem;">Stop Generation</button>
+            </div>
+
+            <div class="token-tracker" id="tokenTracker" style="display: none;">
+                <strong>Tokens Generated:</strong> <span id="tokenCount">0</span> / <span id="maxTokenDisplay">1000</span>
+            </div>
+
+            <div class="error" id="error" style="display: none;"></div>
+        </div>
+
+        <div class="main-content">
+            <div class="tabs">
+                <button class="tab active" data-tab="story">Story</button>
+                <button class="tab" data-tab="files">Files</button>
+            </div>
+
+            <div class="tab-content active" id="storyTab">
+                <div class="story-container" id="storyContainer">
+                    <div class="story-header">
+                        <div class="story-title">Your Generated Story</div>
+                        <div class="story-actions">
+                            <button class="btn btn-small btn-secondary" id="copyBtn">Copy</button>
+                            <button class="btn btn-small btn-secondary" id="downloadBtn">Download</button>
+                        </div>
+                    </div>
+                    <div class="story-content" id="storyContent" contenteditable="true" placeholder="Story will appear here..."></div>
+                    
+                    <div class="continuation-form" id="continuationForm">
+                        <h4>Continue the Story</h4>
+                        <div class="form-group">
+                            <label for="continuationPrompt">Additional Direction (optional)</label>
+                            <input type="text" id="continuationPrompt" placeholder="Add a twist, introduce a new character, or leave empty to continue naturally...">
+                        </div>
+                        <button class="btn" id="continueBtn">Continue Story</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="filesTab">
+                <div class="files-section">
+                    <div class="files-header">
+                        <div class="files-title">Generated Stories</div>
+                        <button class="btn btn-small btn-secondary" id="refreshFilesBtn">Refresh</button>
+                    </div>
+                    <div class="files-list" id="filesList">
+                        <p style="color: #6b7280; text-align: center; padding: 2rem;">No stories generated yet</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStory = '';
+        let currentFilename = '';
+        let storyHistory = [];
+        let currentHistoryIndex = -1;
+        let currentReader = null;
+        let isGenerating = false;
+        let tokenCount = 0;
+        let wasStopped = false;
+
+        // Token slider functionality
+        const tokenSlider = document.getElementById('maxTokens');
+        const tokenValueDisplay = document.getElementById('tokenValueDisplay');
+        const tokenValue = document.getElementById('tokenValue');
+
+        function updateTokenDisplay() {
+            const value = tokenSlider.value;
+            tokenValueDisplay.textContent = value;
+            tokenValue.textContent = value;
+            document.getElementById('maxTokenDisplay').textContent = value;
+        }
+
+        tokenSlider.addEventListener('input', updateTokenDisplay);
+        updateTokenDisplay();
+
+        // Stop generation
+        document.getElementById('stopBtn').addEventListener('click', function() {
+            if (currentReader) {
+                currentReader.cancel();
+                currentReader = null;
+            }
+            isGenerating = false;
+            wasStopped = true;
+            document.getElementById('generationStatus').style.display = 'none';
+            document.getElementById('generateBtn').disabled = false;
+            document.getElementById('continueBtn').disabled = false;
+            
+            // Show continuation form if we have some story content
+            if (currentStory.trim()) {
+                document.getElementById('continuationForm').classList.add('show');
+            }
+        });
+
+        // Tab functionality
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
+                
+                if (tab.dataset.tab === 'files') {
+                    loadFiles();
+                }
+            });
+        });
+
+        // Story generation
+        document.getElementById('storyForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const prompt = document.getElementById('prompt').value.trim();
+            const model = document.getElementById('modelSelect').value;
+            const maxTokens = parseInt(document.getElementById('maxTokens').value);
+            const generateBtn = document.getElementById('generateBtn');
+            const generationStatus = document.getElementById('generationStatus');
+            const generationText = document.getElementById('generationText');
+            const storyContainer = document.getElementById('storyContainer');
+            const storyContent = document.getElementById('storyContent');
+            const error = document.getElementById('error');
+            const tokenTracker = document.getElementById('tokenTracker');
+            
+            if (!prompt) {
+                showError('Please enter a story prompt');
+                return;
+            }
+            
+            // Show generation status
+            generateBtn.disabled = true;
+            generationStatus.style.display = 'block';
+            storyContainer.classList.remove('show');
+            error.style.display = 'none';
+            tokenTracker.style.display = 'block';
+            
+            currentStory = '';
+            storyHistory = [];
+            currentHistoryIndex = -1;
+            tokenCount = 0;
+            isGenerating = true;
+            wasStopped = false;
+            
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        model: model,
+                        max_tokens: maxTokens,
+                        continuation: false,
+                        previous_story: '',
+                        original_filename: null
+                    })
+                });
+                
+                currentReader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await currentReader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                
+                                if (data.error) {
+                                    showError(data.error);
+                                    break;
+                                }
+                                
+                                if (data.chunk) {
+                                    currentStory += data.chunk;
+                                    storyContent.textContent = currentStory;
+                                    storyContainer.classList.add('show');
+                                    
+                                    // Update token count from backend
+                                    if (data.token_count !== undefined) {
+                                        tokenCount = data.token_count;
+                                        document.getElementById('tokenCount').textContent = tokenCount;
+                                    }
+                                }
+                                
+                                if (data.done) {
+                                    currentFilename = data.filename;
+                                    
+                                    if (data.token_limit_reached) {
+                                        generationText.textContent = 'Token limit reached!';
+                                    } else {
+                                        generationText.textContent = 'Story complete!';
+                                    }
+                                    
+                                    // Save to history
+                                    saveToHistory(currentStory);
+                                    
+                                    // Show continuation form
+                                    document.getElementById('continuationForm').classList.add('show');
+                                    
+                                    setTimeout(() => {
+                                        generationStatus.style.display = 'none';
+                                    }, 2000);
+                                    break;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing JSON:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    showError('Network error: ' + err.message);
+                }
+            } finally {
+                isGenerating = false;
+                currentReader = null;
+                generateBtn.disabled = false;
+            }
+        });
+
+        // Story continuation
+        document.getElementById('continueBtn').addEventListener('click', async function() {
+            const continuationPrompt = document.getElementById('continuationPrompt').value.trim();
+            const model = document.getElementById('modelSelect').value;
+            const maxTokens = parseInt(document.getElementById('maxTokens').value);
+            
+            const continueBtn = document.getElementById('continueBtn');
+            const generationStatus = document.getElementById('generationStatus');
+            const generationText = document.getElementById('generationText');
+            const storyContent = document.getElementById('storyContent');
+            const tokenTracker = document.getElementById('tokenTracker');
+            
+            continueBtn.disabled = true;
+            generationStatus.style.display = 'block';
+            tokenTracker.style.display = 'block';
+            
+            let continuationText = '';
+            tokenCount = 0;
+            isGenerating = true;
+            wasStopped = false;
+            
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: continuationPrompt || 'Continue the story naturally',
+                        model: model,
+                        max_tokens: maxTokens,
+                        continuation: true,
+                        previous_story: currentStory,
+                        original_filename: currentFilename
+                    })
+                });
+                
+                currentReader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await currentReader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                
+                                if (data.error) {
+                                    showError(data.error);
+                                    break;
+                                }
+                                
+                                if (data.chunk) {
+                                    continuationText += data.chunk;
+                                    storyContent.textContent = currentStory + '\n\n' + continuationText;
+                                    
+                                    // Update token count from backend
+                                    if (data.token_count !== undefined) {
+                                        tokenCount = data.token_count;
+                                        document.getElementById('tokenCount').textContent = tokenCount;
+                                    }
+                                }
+                                
+                                if (data.done) {
+                                    currentStory += '\n\n' + continuationText;
+                                    currentFilename = data.filename;
+                                    
+                                    if (data.token_limit_reached) {
+                                        generationText.textContent = 'Token limit reached!';
+                                    } else {
+                                        generationText.textContent = 'Continuation complete!';
+                                    }
+                                    
+                                    // Save to history
+                                    saveToHistory(currentStory);
+                                    
+                                    setTimeout(() => {
+                                        generationStatus.style.display = 'none';
+                                    }, 2000);
+                                    break;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing JSON:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    showError('Network error: ' + err.message);
+                }
+            } finally {
+                isGenerating = false;
+                currentReader = null;
+                continueBtn.disabled = false;
+            }
+        });
+
+        // History management
+        function saveToHistory(story) {
+            storyHistory.push(story);
+            currentHistoryIndex = storyHistory.length - 1;
+        }
+
+        // Copy story
+        document.getElementById('copyBtn').addEventListener('click', function() {
+            navigator.clipboard.writeText(currentStory).then(() => {
+                const btn = this;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            });
+        });
+
+        // Download story
+        document.getElementById('downloadBtn').addEventListener('click', function() {
+            const blob = new Blob([currentStory], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = currentFilename || 'story.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // Load files
+        async function loadFiles() {
+            try {
+                const response = await fetch('/files');
+                const data = await response.json();
+                
+                const filesList = document.getElementById('filesList');
+                
+                if (data.files.length === 0) {
+                    filesList.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 2rem;">No stories generated yet</p>';
+                    return;
+                }
+                
+                filesList.innerHTML = data.files.map(file => `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-meta">${file.modified} • ${(file.size / 1024).toFixed(1)} KB</div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="btn btn-small btn-secondary" onclick="loadFile('${file.name}')">Load</button>
+                            <button class="btn btn-small btn-secondary" onclick="downloadFile('${file.name}')">Download</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Error loading files:', err);
+            }
+        }
+
+        // Load file content
+        async function loadFile(filename) {
+            try {
+                const response = await fetch(`/read_file/${filename}`);
+                const data = await response.json();
+                
+                if (data.content) {
+                    currentStory = data.content;
+                    currentFilename = filename;
+                    document.getElementById('storyContent').textContent = currentStory;
+                    document.getElementById('storyContainer').classList.add('show');
+                    document.getElementById('continuationForm').classList.add('show');
+                    document.getElementById('tokenTracker').style.display = 'block';
+                    
+                    // Switch to story tab
+                    document.querySelector('[data-tab="story"]').click();
+                }
+            } catch (err) {
+                console.error('Error loading file:', err);
+                showError('Error loading file');
+            }
+        }
+
+        // Download file
+        function downloadFile(filename) {
+            window.open(`/output/${filename}`, '_blank');
+        }
+
+        // Refresh files
+        document.getElementById('refreshFilesBtn').addEventListener('click', loadFiles);
+        
+        function showError(message) {
+            const error = document.getElementById('error');
+            error.textContent = message;
+            error.style.display = 'block';
+        }
+        
+        // Auto-refresh status every 30 seconds
+        setInterval(async function() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                
+                const statusIndicator = document.querySelector('.status-indicator');
+                const generateBtn = document.getElementById('generateBtn');
+                
+                if (data.ollama_running) {
+                    statusIndicator.className = 'status-indicator status-online';
+                    statusIndicator.textContent = '✅ Ollama is running';
+                    generateBtn.disabled = false;
+                } else {
+                    statusIndicator.className = 'status-indicator status-offline';
+                    statusIndicator.textContent = '❌ Ollama is not running';
+                    generateBtn.disabled = true;
+                }
+            } catch (err) {
+                console.log('Status check failed:', err);
+            }
+        }, 30000);
+    </script>
+</body>
+</html> 
