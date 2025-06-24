@@ -132,8 +132,7 @@ python install_ollama.py
 ### Uncensored Models
 - Uncensored models can generate explicit, violent, or controversial content
 - Use responsibly and ensure compliance with local laws
-- These models have NO content restrictions or safety filters
-- Intended for adult users and creative writing
+- These models have no content restrictions or safety filters
 
 ### System Requirements
 - **Small Models (7B)**: 8GB RAM minimum
