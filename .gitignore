@@ -185,6 +185,7 @@ output/
 !requirements.txt
 !README.md
 !GETTING_STARTED.md
+api_keys.json
 
 # Ollama models (these can be very large)
 models/
@@ -254,3 +255,4 @@ dist/
 .Trashes
 ehthumbs.db
 Thumbs.db 
+api_keys.json

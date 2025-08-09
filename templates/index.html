@@ -554,6 +554,10 @@
                         <div class="story-actions">
                             <button class="btn btn-small btn-secondary" id="copyBtn">Copy</button>
                             <button class="btn btn-small btn-secondary" id="downloadBtn">Download</button>
+                            <button class="btn btn-small btn-secondary" id="readBtn">Read Aloud</button>
+                            <button class="btn btn-small btn-secondary" id="readFromHereBtn" title="Read from cursor/selection">Read From Here</button>
+                            <button class="btn btn-small btn-secondary" id="stopReadBtn" disabled>Stop</button>
+                            <button class="btn btn-small btn-secondary" id="voiceToggleBtn" title="Toggle voice engine">Voice: HQ</button>
                         </div>
                     </div>
                     <div class="story-content" id="storyContent" contenteditable="true" placeholder="Story will appear here..."></div>
@@ -592,6 +596,10 @@
         let isGenerating = false;
         let tokenCount = 0;
         let wasStopped = false;
+        let isReading = false;
+        let currentUtterance = null;
+        let voicePreferred = null;
+        let useHighQualityTTS = true; // Toggle HQ (server) vs browser TTS
 
         // Token slider functionality
         const tokenSlider = document.getElementById('maxTokens');
@@ -607,6 +615,49 @@
 
         tokenSlider.addEventListener('input', updateTokenDisplay);
         updateTokenDisplay();
+
+        // Initialize voices and pick a young female-sounding voice if available
+        function pickPreferredVoice() {
+            if (!('speechSynthesis' in window)) return null;
+            const voices = window.speechSynthesis.getVoices();
+            if (!voices || voices.length === 0) return null;
+
+            const preferNames = [
+                'child', 'girl', 'young', 'kids',
+                'Ivy', 'Salli', 'Aria', 'Jenny', 'Samantha', 'Zira', 'Neural'
+            ];
+            // English female-ish voices first
+            const englishVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('en'));
+            // Score voices by name match
+            function scoreVoice(v) {
+                const name = (v.name || '').toLowerCase();
+                let score = 0;
+                preferNames.forEach(p => { if (name.includes(p.toLowerCase())) score += 2; });
+                if (name.includes('female') || name.includes('girl')) score += 2;
+                if (name.includes('aria') || name.includes('ivy')) score += 1;
+                return score;
+            }
+            let best = null;
+            let bestScore = -1;
+            englishVoices.forEach(v => {
+                const s = scoreVoice(v);
+                if (s > bestScore) { best = v; bestScore = s; }
+            });
+            return best || englishVoices[0] || voices[0];
+        }
+
+        function initVoices() {
+            try {
+                voicePreferred = pickPreferredVoice();
+            } catch (e) { /* ignore */ }
+        }
+
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = () => {
+                if (!voicePreferred) initVoices();
+            };
+            initVoices();
+        }
 
         // Stop generation
         document.getElementById('stopBtn').addEventListener('click', function() {
@@ -760,8 +811,22 @@
             }
         });
 
+        // Update currentStory when user edits the content
+        document.getElementById('storyContent').addEventListener('input', function() {
+            currentStory = this.textContent;
+        });
+
+        // Also update when content loses focus (for paste operations, etc.)
+        document.getElementById('storyContent').addEventListener('blur', function() {
+            currentStory = this.textContent;
+        });
+
         // Story continuation
         document.getElementById('continueBtn').addEventListener('click', async function() {
+            // Make sure currentStory is up to date with any user edits
+            const storyContent = document.getElementById('storyContent');
+            currentStory = storyContent.textContent;
+            
             const continuationPrompt = document.getElementById('continuationPrompt').value.trim();
             const model = document.getElementById('modelSelect').value;
             const maxTokens = parseInt(document.getElementById('maxTokens').value);
@@ -769,7 +834,6 @@
             const continueBtn = document.getElementById('continueBtn');
             const generationStatus = document.getElementById('generationStatus');
             const generationText = document.getElementById('generationText');
-            const storyContent = document.getElementById('storyContent');
             const tokenTracker = document.getElementById('tokenTracker');
             
             continueBtn.disabled = true;
@@ -871,7 +935,11 @@
 
         // Copy story
         document.getElementById('copyBtn').addEventListener('click', function() {
-            navigator.clipboard.writeText(currentStory).then(() => {
+            // Get the current content from the editable div
+            const storyContent = document.getElementById('storyContent');
+            const currentText = storyContent.textContent;
+            
+            navigator.clipboard.writeText(currentText).then(() => {
                 const btn = this;
                 const originalText = btn.textContent;
                 btn.textContent = 'Copied!';
@@ -883,7 +951,11 @@
 
         // Download story
         document.getElementById('downloadBtn').addEventListener('click', function() {
-            const blob = new Blob([currentStory], { type: 'text/plain' });
+            // Get the current content from the editable div
+            const storyContent = document.getElementById('storyContent');
+            const currentText = storyContent.textContent;
+            
+            const blob = new Blob([currentText], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -891,6 +963,182 @@
             a.click();
             URL.revokeObjectURL(url);
         });
+
+        // Text-to-Speech helpers
+        function chunkText(text, maxLen = 260) {
+            const sentences = text
+                .replace(/\s+/g, ' ')
+                .split(/(?<=[.!?])\s+/);
+            const chunks = [];
+            let buffer = '';
+            for (const s of sentences) {
+                if ((buffer + ' ' + s).trim().length > maxLen) {
+                    if (buffer) chunks.push(buffer.trim());
+                    buffer = s;
+                } else {
+                    buffer = (buffer ? buffer + ' ' : '') + s;
+                }
+            }
+            if (buffer) chunks.push(buffer.trim());
+            // Fallback if there were no sentence boundaries
+            if (chunks.length === 0 && text.length > 0) {
+                for (let i = 0; i < text.length; i += maxLen) {
+                    chunks.push(text.slice(i, i + maxLen));
+                }
+            }
+            return chunks;
+        }
+
+        function speakStory(text) {
+            if (!('speechSynthesis' in window)) {
+                showError('Text-to-Speech is not supported in this browser.');
+                return;
+            }
+            if (!text || !text.trim()) return;
+
+            const readBtn = document.getElementById('readBtn');
+            const stopBtn = document.getElementById('stopReadBtn');
+            readBtn.disabled = true;
+            stopBtn.disabled = false;
+
+            isReading = true;
+            const chunks = chunkText(text);
+            let index = 0;
+
+            const speakNext = () => {
+                if (!isReading || index >= chunks.length) {
+                    isReading = false;
+                    readBtn.disabled = false;
+                    stopBtn.disabled = true;
+                    return;
+                }
+                const utt = new SpeechSynthesisUtterance(chunks[index]);
+                currentUtterance = utt;
+                if (voicePreferred) utt.voice = voicePreferred;
+                utt.rate = 1.12;   // slightly faster to emulate a young voice
+                utt.pitch = 1.35;  // higher pitch for youthful tone
+                utt.volume = 1.0;
+                utt.onend = () => { index += 1; speakNext(); };
+                utt.onerror = () => {
+                    // skip to next chunk on error
+                    index += 1; speakNext();
+                };
+                window.speechSynthesis.speak(utt);
+            };
+            speakNext();
+        }
+
+        document.getElementById('readBtn').addEventListener('click', async function() {
+            const storyContent = document.getElementById('storyContent');
+            const text = (storyContent.textContent || currentStory || '').trim();
+            if (!text) return;
+
+            if (useHighQualityTTS) {
+                // Stream HQ audio from server (ElevenLabs)
+                try {
+                    await playHighQualityTTS(text);
+                } catch (e) {
+                    // Fallback to browser TTS
+                    speakStory(text);
+                }
+            } else {
+                speakStory(text);
+            }
+        });
+
+        document.getElementById('stopReadBtn').addEventListener('click', function() {
+            if ('speechSynthesis' in window) {
+                isReading = false;
+                try { window.speechSynthesis.cancel(); } catch (e) {}
+            }
+            document.getElementById('readBtn').disabled = false;
+            document.getElementById('stopReadBtn').disabled = true;
+        });
+
+        document.getElementById('voiceToggleBtn').addEventListener('click', function() {
+            useHighQualityTTS = !useHighQualityTTS;
+            this.textContent = 'Voice: ' + (useHighQualityTTS ? 'HQ' : 'Browser');
+        });
+
+        // Read from current cursor/selection position within the story
+        function getSelectionStartOffsetIn(element) {
+            const sel = window.getSelection ? window.getSelection() : null;
+            if (!sel || sel.rangeCount === 0) return null;
+            const range = sel.getRangeAt(0);
+            if (!element.contains(range.startContainer)) return null;
+            try {
+                const temp = document.createRange();
+                temp.selectNodeContents(element);
+                temp.setEnd(range.startContainer, range.startOffset);
+                const offset = temp.toString().length;
+                return offset;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        document.getElementById('readFromHereBtn').addEventListener('click', async function() {
+            const el = document.getElementById('storyContent');
+            const allText = (el.textContent || '').trim();
+            if (!allText) return;
+            const start = getSelectionStartOffsetIn(el);
+            const text = (start !== null && start >= 0 && start < allText.length)
+                ? allText.slice(start)
+                : allText;
+
+            if (useHighQualityTTS) {
+                try { await playHighQualityTTS(text); }
+                catch (e) { speakStory(text); }
+            } else {
+                speakStory(text);
+            }
+        });
+
+        // High-quality server TTS player
+        let currentAudio = null;
+        async function playHighQualityTTS(text) {
+            // Stop any current playback (server audio or browser TTS)
+            try { if (currentAudio) { currentAudio.pause(); currentAudio = null; } } catch (e) {}
+            if ('speechSynthesis' in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+
+            const readBtn = document.getElementById('readBtn');
+            const stopBtn = document.getElementById('stopReadBtn');
+            readBtn.disabled = true;
+            stopBtn.disabled = false;
+
+            // Use MediaSource-like streaming by just pointing to the streaming endpoint
+            const audio = new Audio();
+            currentAudio = audio;
+            audio.src = '/tts';
+            // POST body via fetch -> create object URL
+            const res = await fetch('/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            if (!res.ok) {
+                readBtn.disabled = false;
+                stopBtn.disabled = true;
+                throw new Error('TTS backend unavailable');
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            audio.src = url;
+            await audio.play();
+
+            audio.onended = () => {
+                try { URL.revokeObjectURL(url); } catch (e) {}
+                readBtn.disabled = false;
+                stopBtn.disabled = true;
+            };
+
+            document.getElementById('stopReadBtn').onclick = () => {
+                try { audio.pause(); } catch (e) {}
+                try { URL.revokeObjectURL(url); } catch (e) {}
+                readBtn.disabled = false;
+                stopBtn.disabled = true;
+            };
+        }
 
         // Load files
         async function loadFiles() {
@@ -929,7 +1177,14 @@
                 const data = await response.json();
                 
                 if (data.content) {
-                    currentStory = data.content;
+                    // Extract just the story content (remove headers)
+                    const lines = data.content.split('\n');
+                    const separatorIndex = lines.findIndex(line => line.includes('='.repeat(50)));
+                    const storyText = separatorIndex !== -1 ? 
+                        lines.slice(separatorIndex + 2).join('\n').trim() : 
+                        data.content;
+                    
+                    currentStory = storyText;
                     currentFilename = filename;
                     document.getElementById('storyContent').textContent = currentStory;
                     document.getElementById('storyContainer').classList.add('show');
